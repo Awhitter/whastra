@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# AgentBox V1 - AI Mastery CLI
+# Usage: ./ai <command> [args]
+
+cmd="${1:-}"
+arg="${2:-}"
+
+case "$cmd" in
+  mastery)
+    if [ -z "$arg" ]; then
+      echo "Usage: ai mastery <agent-name>"
+      echo "Available agents: research, content, recruiting, coordinator"
+      exit 1
+    fi
+    echo "🎯 Launching AI Mastery: $arg"
+    cd infrastructure
+    docker compose --profile "$arg" up -d "$arg-agent"
+    docker compose logs -f "$arg-agent"
+    ;;
+    
+  infra-up)
+    echo "🏗️  Starting infrastructure..."
+    cd infrastructure
+    # internal MindsDB is optional; start it via: ai mindsdb-up
+    docker compose up -d postgres redis qdrant n8n gateway
+    echo "✅ Infrastructure running"
+    echo "📊 Postgres: localhost:5432"
+    echo "💾 Redis: localhost:6379"
+    echo "🔍 Qdrant: localhost:6333"
+    echo "🔄 n8n: localhost:5678"
+    echo "🌐 Gateway: localhost:8000"
+    ;;
+
+  mindsdb-up)
+    echo "🧠 Starting internal MindsDB..."
+    cd infrastructure
+    docker compose --profile internal-mindsdb up -d mindsdb
+    echo "✅ MindsDB (internal) running on 47334"
+    ;;
+
+  infra-down)
+    echo "🛑 Stopping infrastructure..."
+    cd infrastructure
+    docker compose down
+    ;;
+    
+  agents-up)
+    echo "🤖 Starting all agents..."
+    cd infrastructure
+    docker compose --profile agents up -d
+    ;;
+    
+  agents-down)
+    echo "🛑 Stopping agents..."
+    cd infrastructure
+    docker compose --profile agents down
+    ;;
+    
+  logs)
+    if [ -z "$arg" ]; then
+      cd infrastructure
+      docker compose logs -f
+    else
+      cd infrastructure
+      docker compose logs -f "$arg-agent"
+    fi
+    ;;
+    
+  health)
+    echo "🏥 Health Check"
+    echo ""
+    curl -s http://localhost:8000/health | jq . || echo "❌ Gateway down"
+    curl -s http://localhost:5678/healthz >/dev/null && echo "✅ n8n healthy" || echo "❌ n8n down"
+    pg_isready -h localhost -p 5432 >/dev/null && echo "✅ Postgres healthy" || echo "❌ Postgres down"
+    redis-cli -h localhost -p 6379 ping >/dev/null && echo "✅ Redis healthy" || echo "❌ Redis down"
+    ;;
+    
+  clean)
+    echo "🧹 Cleaning up..."
+    cd infrastructure
+    docker compose down -v
+    echo "✅ All containers and volumes removed"
+    ;;
+    
+  *)
+    echo "AgentBox V1 - AI Mastery Commands"
+    echo ""
+    echo "Infrastructure:"
+    echo "  ai infra-up           Start core services (postgres, redis, qdrant, n8n, gateway)"
+    echo "  ai mindsdb-up         Start internal MindsDB (optional)"
+    echo "  ai infra-down         Stop core services"
+    echo ""
+    echo "Agents:"
+    echo "  ai mastery <agent>    Launch specific agent"
+    echo "  ai agents-up          Start all agents"
+    echo "  ai agents-down        Stop all agents"
+    echo ""
+    echo "Monitoring:"
+    echo "  ai logs [agent]       View logs"
+    echo "  ai health             Health check"
+    echo ""
+    echo "Maintenance:"
+    echo "  ai clean              Remove all containers & volumes"
+    ;;
+esac

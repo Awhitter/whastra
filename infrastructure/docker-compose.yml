@@ -1,0 +1,87 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: agentbox-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-agentbox}       # was PG_USER
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}         # was PG_PASSWORD
+      POSTGRES_DB: ${POSTGRES_DB:-agentbox}           # explicit
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-agentbox}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: agentbox-redis
+    ports: ["6379:6379"]
+    volumes: [ "redis:/data" ]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+
+  qdrant:
+    image: qdrant/qdrant:v1.9.0
+    container_name: agentbox-qdrant
+    ports: ["6333:6333", "6334:6334"]
+    volumes: [ "qdrant:/qdrant/storage" ]
+
+  # MindsDB is OPTIONAL here; you can run your separate stack.
+  mindsdb:
+    image: mindsdb/mindsdb:latest
+    container_name: agentbox-mindsdb
+    profiles: ["internal-mindsdb"]                   # only starts when you ask
+    ports: ["47334:47334"]
+    environment:
+      MINDSDB_DB_USER: mindsdb
+      MINDSDB_DB_PASSWORD: ${MINDSDB_PASSWORD}
+    volumes: [ "mindsdb:/root/mindsdb_storage" ]
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: agentbox-n8n
+    ports: ["5678:5678"]
+    environment:
+      N8N_BASIC_AUTH_ACTIVE: "true"
+      N8N_BASIC_AUTH_USER: ${N8N_USER}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_PASSWORD}
+    volumes: [ "n8n:/home/node/.n8n" ]
+
+  gateway:
+    build: ../core/gateway
+    container_name: agentbox-gateway
+    ports: ["8000:8000"]
+    env_file: .env
+    depends_on: [redis, qdrant]                      # mindsdb is now optional/external
+    networks: [default, agentbox_net]
+
+  research-agent:
+    build:
+      context: ..
+      dockerfile: agents/research/Dockerfile
+    container_name: agentbox-research
+    env_file: .env
+    depends_on: [qdrant]
+    profiles: ["agents", "research"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks: [default, agentbox_net]
+
+volumes:
+  pgdata:
+  redis:
+  qdrant:
+  mindsdb:
+  n8n:
+
+networks:
+  agentbox_net:
+    external: true
