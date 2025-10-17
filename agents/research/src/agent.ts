@@ -6,7 +6,8 @@ import { openai } from '@ai-sdk/openai';
 
 // ESM requires explicit .js extensions; compiled shared tools live at /core/shared/tools/*.js
 import { mindsdbQuery } from '../../../core/shared/tools/mindsdb.js';
-import { webSearch } from '../../../core/shared/tools/web.js';
+import { webSearch, webScrape, extractCitation } from '../../../core/shared/tools/web.js';
+import { airtableQuery, airtableCreate, airtableUpdate, airtableFetchPersona } from '../../../core/shared/tools/airtable.js';
 
 /**
  * Research Agent
@@ -56,16 +57,26 @@ PRINCIPLES
 - Tag confidence: high / medium / low.
 
 WORKFLOW
-1) Search authoritative sources.
+1) Search authoritative sources (web.search).
 2) Extract key findings with quotes/data.
 3) Cross-check and note disagreements.
-4) Quant where useful (MindsDB SQL).
-5) Return executive summary + evidence pack.
+4) Query data sources (MindsDB SQL, Airtable).
+5) Log findings to Airtable when appropriate.
+6) Return executive summary + evidence pack.
 
 OUTPUT
 - Executive summary (2–3 sentences)
 - Key findings (bulleted, each with citation)
 - Actionable recommendations
 - Evidence pack for RAG`,
-  tools: { webSearch, mindsdbQuery, createEvidencePack },
+  tools: {
+    webSearch,
+    webScrape,
+    extractCitation,
+    mindsdbQuery,
+    createEvidencePack,
+    airtableQuery,
+    airtableCreate,
+    airtableUpdate,
+  },
 });
