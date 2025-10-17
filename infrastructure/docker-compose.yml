@@ -75,6 +75,21 @@ services:
       retries: 10
     networks: [default, agentbox_net]
 
+  content-agent:
+    build:
+      context: ..
+      dockerfile: agents/content/Dockerfile
+    container_name: agentbox-content
+    env_file: .env
+    depends_on: [qdrant]
+    profiles: ["agents", "content"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3104/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks: [default, agentbox_net]
+
 volumes:
   pgdata:
   redis:
