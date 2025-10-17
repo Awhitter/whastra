@@ -41,9 +41,17 @@ const createEvidencePack = createTool({
 
 // Pick provider + model from env with sensible defaults
 function pickModel() {
-  const vendor = (process.env.LLM_VENDOR || 'anthropic').toLowerCase();
-  const id = (process.env.MODEL || (vendor === 'anthropic' ? 'claude-sonnet-4-5-20250929' : 'gpt-5')).trim();
-  return vendor === 'anthropic' ? anthropic(id as any) : openai(id as any);
+  const vendor = (process.env.LLM_VENDOR || '').toLowerCase();
+  const modelId = process.env.MODEL?.trim();
+
+  if (vendor === 'openai') {
+    return openai((modelId || 'gpt-4o') as any);
+  }
+  if (vendor === 'anthropic') {
+    return anthropic((modelId || 'claude-3-5-sonnet-20240620') as any);
+  }
+  // default to OpenAI if not specified
+  return openai((modelId || 'gpt-4o') as any);
 }
 
 export const researchAgent = new Agent({

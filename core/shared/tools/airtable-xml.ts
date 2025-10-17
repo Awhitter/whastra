@@ -8,13 +8,13 @@ import { z } from 'zod';
  * Content Initiators → Bundles → XML context flow
  */
 
-function airtableHeaders() {
+function airtableHeadersOrNull() {
   const token = process.env.AIRTABLE_PAT || process.env.AIRTABLE_API_KEY || process.env.AIRTABLE_TOKEN;
-  if (!token) throw new Error('Set AIRTABLE_PAT or AIRTABLE_API_KEY in .env');
+  if (!token) return null;
   return {
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
-  };
+  } as const;
 }
 
 /**
@@ -30,6 +30,11 @@ export const airtableGetContentBundle = createTool({
     initiatorId: z.string().describe('Content Initiator record ID (rec...)'),
   }),
   execute: async ({ context }) => {
+    const headers = airtableHeadersOrNull();
+    if (!headers) {
+      return { ok: false, skipped: true, reason: 'Airtable not configured (no PAT/API key)' };
+    }
+
     const baseId = context.baseId || process.env.AIRTABLE_BASE_ID || process.env.AIRTABLE_CONTENT_BASE_ID;
     if (!baseId) {
       return { ok: false, skipped: true, reason: 'No Airtable Base ID configured' };
@@ -41,7 +46,7 @@ export const airtableGetContentBundle = createTool({
     try {
       // Fetch the Content Initiator record
       const url = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(initiatorTable)}/${context.initiatorId}`;
-      const res = await fetch(url, { headers: airtableHeaders() as any });
+      const res = await fetch(url, { headers });
 
       if (!res.ok) {
         return { ok: false, status: res.status, reason: await res.text() };
@@ -119,6 +124,11 @@ export const airtableCreateContentRequest = createTool({
     domainSlugs: z.array(z.string()).optional().describe('Domain slugs to link'),
   }),
   execute: async ({ context }) => {
+    const headers = airtableHeadersOrNull();
+    if (!headers) {
+      return { ok: false, skipped: true, reason: 'Airtable not configured (no PAT/API key)' };
+    }
+
     const baseId = context.baseId || process.env.AIRTABLE_BASE_ID || process.env.AIRTABLE_CONTENT_BASE_ID;
     if (!baseId) {
       return { ok: false, skipped: true, reason: 'No Airtable Base ID configured' };
@@ -146,7 +156,7 @@ export const airtableCreateContentRequest = createTool({
       const url = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(initiatorTable)}`;
       const res = await fetch(url, {
         method: 'POST',
-        headers: airtableHeaders() as any,
+        headers,
         body: JSON.stringify({
           records: [{ fields }],
           typecast: true
@@ -180,6 +190,11 @@ export const airtableGetPersonaContext = createTool({
     slug: z.string().describe('Persona slug'),
   }),
   execute: async ({ context }) => {
+    const headers = airtableHeadersOrNull();
+    if (!headers) {
+      return { ok: false, skipped: true, reason: 'Airtable not configured (no PAT/API key)' };
+    }
+
     const baseId = context.baseId || process.env.AIRTABLE_BASE_ID || process.env.AIRTABLE_CONTENT_BASE_ID;
     if (!baseId) {
       return { ok: false, skipped: true, reason: 'No Airtable Base ID configured' };
@@ -193,7 +208,7 @@ export const airtableGetPersonaContext = createTool({
       const url = new URL(`https://api.airtable.com/v0/${baseId}/${encodeURIComponent(personaTable)}`);
       url.searchParams.set('filterByFormula', `LOWER({Slug})="${slug}"`);
 
-      const res = await fetch(url.toString(), { headers: airtableHeaders() as any });
+      const res = await fetch(url.toString(), { headers });
 
       if (!res.ok) {
         return { ok: false, status: res.status, reason: await res.text() };
@@ -231,6 +246,11 @@ export const airtableGetDomainKnowledge = createTool({
     slug: z.string().describe('Domain slug'),
   }),
   execute: async ({ context }) => {
+    const headers = airtableHeadersOrNull();
+    if (!headers) {
+      return { ok: false, skipped: true, reason: 'Airtable not configured (no PAT/API key)' };
+    }
+
     const baseId = context.baseId || process.env.AIRTABLE_BASE_ID || process.env.AIRTABLE_CONTENT_BASE_ID;
     if (!baseId) {
       return { ok: false, skipped: true, reason: 'No Airtable Base ID configured' };
@@ -244,7 +264,7 @@ export const airtableGetDomainKnowledge = createTool({
       const url = new URL(`https://api.airtable.com/v0/${baseId}/${encodeURIComponent(domainTable)}`);
       url.searchParams.set('filterByFormula', `LOWER({Slug})="${slug}"`);
 
-      const res = await fetch(url.toString(), { headers: airtableHeaders() as any });
+      const res = await fetch(url.toString(), { headers });
 
       if (!res.ok) {
         return { ok: false, status: res.status, reason: await res.text() };
@@ -285,6 +305,11 @@ export const airtableUpdateContentOutput = createTool({
     metadata: z.record(z.any()).optional().describe('Additional metadata to store'),
   }),
   execute: async ({ context }) => {
+    const headers = airtableHeadersOrNull();
+    if (!headers) {
+      return { ok: false, skipped: true, reason: 'Airtable not configured (no PAT/API key)' };
+    }
+
     const baseId = context.baseId || process.env.AIRTABLE_BASE_ID || process.env.AIRTABLE_CONTENT_BASE_ID;
     if (!baseId) {
       return { ok: false, skipped: true, reason: 'No Airtable Base ID configured' };
@@ -305,7 +330,7 @@ export const airtableUpdateContentOutput = createTool({
       const url = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(initiatorTable)}`;
       const res = await fetch(url, {
         method: 'PATCH',
-        headers: airtableHeaders() as any,
+        headers,
         body: JSON.stringify({
           records: [{
             id: context.initiatorId,
@@ -325,6 +350,161 @@ export const airtableUpdateContentOutput = createTool({
         updated: true,
         recordId: context.initiatorId,
         fields: result.records[0].fields
+      };
+    } catch (error: any) {
+      return { ok: false, error: error.message };
+    }
+  }
+});
+
+/**
+ * Get Hydrated Content Context - Fully hydrated XML bundle with embedded context
+ *
+ * Fetches initiator and ALL linked resources (Personas, Domains, Entities, References)
+ * in one deterministic call, embedding actual XML instead of just IDs.
+ */
+export const airtableGetHydratedContentContext = createTool({
+  id: 'airtable.getHydratedContentContext',
+  description: 'Return fully hydrated XML bundle for Content Initiator: includes goal, content+output types, and embedded XML from linked Personas, Domains, Entities, References.',
+  inputSchema: z.object({
+    initiatorId: z.string().describe('Content Initiator record ID'),
+    baseId: z.string().optional().describe('Airtable Base ID (defaults to env)'),
+  }),
+  execute: async ({ context }) => {
+    const headers = airtableHeadersOrNull();
+    if (!headers) {
+      return { ok: false, skipped: true, reason: 'Airtable not configured (no PAT/API key)' };
+    }
+
+    const baseId = context.baseId || process.env.AIRTABLE_BASE_ID || process.env.AIRTABLE_CONTENT_BASE_ID;
+    if (!baseId) {
+      return { ok: false, skipped: true, reason: 'No Airtable Base ID configured' };
+    }
+
+    try {
+      // 1) Fetch initiator by ID
+      const initiatorTable = process.env.AIRTABLE_TABLE_CONTENT_INITIATORS || 'Content Initiators';
+      const initUrl = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(initiatorTable)}/${context.initiatorId}`;
+      const initRes = await fetch(initUrl, { headers });
+      if (!initRes.ok) {
+        return { ok: false, status: initRes.status, reason: await initRes.text() };
+      }
+      const init: any = await initRes.json();
+
+      // 2) Gather linked IDs
+      const personas: string[] = init.fields['Personas'] || [];
+      const domains: string[] = init.fields['Content Domains'] || [];
+      const entities: string[] = init.fields['Entity'] || [];
+      const references: string[] = init.fields['References'] || [];
+
+      // 3) Helper to fetch XML by record IDs
+      async function fetchByIds(table: string, ids: string[], xmlField = 'XML Bundle'): Promise<string[]> {
+        const results: any[] = [];
+        for (const id of ids) {
+          const u = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(table)}/${id}`;
+          // headers is guaranteed non-null by check above
+          const r = await fetch(u, { headers: headers! });
+          if (r.ok) {
+            const record = await r.json();
+            results.push(record);
+          }
+        }
+        return results
+          .map(r => (r?.fields?.[xmlField] || '') as string)
+          .filter(Boolean);
+      }
+
+      // 4) Fetch XML snippets from linked resources
+      const personaXml = await fetchByIds(
+        process.env.AIRTABLE_TABLE_PERSONAS || 'Personas',
+        personas,
+        'XML Bundle'
+      );
+      const domainXml = await fetchByIds(
+        process.env.AIRTABLE_TABLE_DOMAINS || 'Content Domains',
+        domains,
+        'XML Bundle'
+      );
+      const entityXml = await fetchByIds(
+        process.env.AIRTABLE_TABLE_ENTITIES || 'Entity',
+        entities,
+        'XML'
+      );
+      const referenceXml = await fetchByIds(
+        process.env.AIRTABLE_TABLE_REFERENCES || 'References',
+        references,
+        'XML'
+      );
+
+      // 5) Assemble bundle with embedded XML content
+      const xmlParts = [
+        `<bundle>`,
+        `  <initiator id="${context.initiatorId}">`,
+      ];
+
+      if (init.fields['Goal']) {
+        xmlParts.push(`    <goal>${init.fields['Goal']}</goal>`);
+      }
+      if (init.fields['Content Type']) {
+        xmlParts.push(`    <contentType>${init.fields['Content Type']}</contentType>`);
+      }
+      if (init.fields['Output Type']) {
+        xmlParts.push(`    <outputType>${init.fields['Output Type']}</outputType>`);
+      }
+
+      xmlParts.push(`  </initiator>`);
+
+      // Embed persona XML
+      if (personaXml.length > 0) {
+        xmlParts.push(`  <personas>`);
+        personaXml.forEach(xml => {
+          xmlParts.push(`    ${xml}`);
+        });
+        xmlParts.push(`  </personas>`);
+      }
+
+      // Embed domain XML
+      if (domainXml.length > 0) {
+        xmlParts.push(`  <domains>`);
+        domainXml.forEach(xml => {
+          xmlParts.push(`    ${xml}`);
+        });
+        xmlParts.push(`  </domains>`);
+      }
+
+      // Embed entity XML
+      if (entityXml.length > 0) {
+        xmlParts.push(`  <entities>`);
+        entityXml.forEach(xml => {
+          xmlParts.push(`    ${xml}`);
+        });
+        xmlParts.push(`  </entities>`);
+      }
+
+      // Embed reference XML
+      if (referenceXml.length > 0) {
+        xmlParts.push(`  <references>`);
+        referenceXml.forEach(xml => {
+          xmlParts.push(`    ${xml}`);
+        });
+        xmlParts.push(`  </references>`);
+      }
+
+      xmlParts.push(`</bundle>`);
+
+      const xml = xmlParts.filter(Boolean).join('\n');
+
+      return {
+        ok: true,
+        mode: 'hydrated',
+        initiatorId: context.initiatorId,
+        xml,
+        linkedCounts: {
+          personas: personaXml.length,
+          domains: domainXml.length,
+          entities: entityXml.length,
+          references: referenceXml.length,
+        }
       };
     } catch (error: any) {
       return { ok: false, error: error.message };

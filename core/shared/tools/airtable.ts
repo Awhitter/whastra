@@ -2,16 +2,16 @@ import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 
 /**
- * Helper function for Airtable API headers
+ * Helper function for Airtable API headers (optional-first pattern)
  */
-function airtableHeaders() {
+function airtableHeadersOrNull() {
   const token =
     process.env.AIRTABLE_PAT || process.env.AIRTABLE_API_KEY || process.env.AIRTABLE_TOKEN;
-  if (!token) throw new Error('Set AIRTABLE_PAT or AIRTABLE_API_KEY in .env');
+  if (!token) return null;
   return {
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
-  };
+  } as const;
 }
 
 /**
@@ -36,6 +36,11 @@ export const airtableQuery = createTool({
     })).optional().describe('Sort configuration')
   }),
   execute: async ({ context }) => {
+    const headers = airtableHeadersOrNull();
+    if (!headers) {
+      return { ok: false, skipped: true, reason: 'Airtable not configured (no PAT/API key)' };
+    }
+
     const { baseId, table, filterByFormula, view, maxRecords = 100, pageSize = 50, fields, sort } = context;
     const params = new URLSearchParams();
 
@@ -50,14 +55,14 @@ export const airtableQuery = createTool({
     });
 
     const url = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(table)}?${params.toString()}`;
-    const res = await fetch(url, { headers: airtableHeaders() as any });
+    const res = await fetch(url, { headers });
 
     if (!res.ok) {
-      throw new Error(`Airtable query failed: ${res.status} ${await res.text()}`);
+      return { ok: false, status: res.status, reason: await res.text() };
     }
 
     const data: any = await res.json();
-    return { baseId, table, records: data.records ?? [] };
+    return { ok: true, baseId, table, records: data.records ?? [] };
   }
 });
 
@@ -76,6 +81,11 @@ export const airtableCreate = createTool({
     typecast: z.boolean().optional().default(true).describe('Auto-convert field types'),
   }),
   execute: async ({ context }) => {
+    const headers = airtableHeadersOrNull();
+    if (!headers) {
+      return { ok: false, skipped: true, reason: 'Airtable not configured (no PAT/API key)' };
+    }
+
     const { baseId, table, records, typecast = true } = context;
     const url = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(table)}`;
     const payload = {
@@ -85,15 +95,16 @@ export const airtableCreate = createTool({
 
     const res = await fetch(url, {
       method: 'POST',
-      headers: airtableHeaders() as any,
+      headers,
       body: JSON.stringify(payload)
     });
 
     if (!res.ok) {
-      throw new Error(`Airtable create failed: ${res.status} ${await res.text()}`);
+      return { ok: false, status: res.status, reason: await res.text() };
     }
 
-    return await res.json();
+    const data: any = await res.json();
+    return { ok: true, ...data };
   }
 });
 
@@ -115,20 +126,26 @@ export const airtableUpdate = createTool({
     typecast: z.boolean().optional().default(true).describe('Auto-convert field types'),
   }),
   execute: async ({ context }) => {
+    const headers = airtableHeadersOrNull();
+    if (!headers) {
+      return { ok: false, skipped: true, reason: 'Airtable not configured (no PAT/API key)' };
+    }
+
     const { baseId, table, updates, typecast = true } = context;
     const url = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(table)}`;
 
     const res = await fetch(url, {
       method: 'PATCH',
-      headers: airtableHeaders() as any,
+      headers,
       body: JSON.stringify({ records: updates, typecast })
     });
 
     if (!res.ok) {
-      throw new Error(`Airtable update failed: ${res.status} ${await res.text()}`);
+      return { ok: false, status: res.status, reason: await res.text() };
     }
 
-    return await res.json();
+    const data: any = await res.json();
+    return { ok: true, ...data };
   }
 });
 
@@ -147,7 +164,7 @@ export const airtableFetchPersona = createTool({
     slug: z.string(),
   }),
   execute: async ({ context }) => {
-    const key = process.env.AIRTABLE_API_KEY || process.env.AIRTABLE_PAT;
+    const headers = airtableHeadersOrNull();
     const base =
       context.baseId ||
       process.env.AIRTABLE_BASE_ID ||
@@ -157,7 +174,7 @@ export const airtableFetchPersona = createTool({
       process.env.AIRTABLE_SOCIAL_MEDIA_BASE_ID ||
       process.env.AIRTABLE_NEWSLETTER_BASE_ID;
 
-    if (!key || !base) {
+    if (!headers || !base) {
       return { ok: false, skipped: true, reason: 'Airtable not configured (missing key or baseId)' };
     }
 
@@ -169,7 +186,7 @@ export const airtableFetchPersona = createTool({
     url.searchParams.set('filterByFormula', `LOWER({Slug})="${slug}"`);
     if (context.view) url.searchParams.set('view', context.view);
 
-    const r = await fetch(url, { headers: { Authorization: `Bearer ${key}` } });
+    const r = await fetch(url, { headers });
     if (!r.ok) return { ok: false, status: r.status, reason: await r.text() };
 
     const json: any = await r.json();

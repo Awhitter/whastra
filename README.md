@@ -14,7 +14,7 @@ cd infrastructure
 docker compose up -d
 
 # 4. Health check
-./scripts/health-check.sh
+curl -s http://localhost:8000/health | jq .
 
 # 5. Launch agent
 ./ai mastery research

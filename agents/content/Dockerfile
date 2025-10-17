@@ -44,7 +44,7 @@ RUN addgroup --system --gid 1001 nodejs && \
 COPY --from=deps /app/agents/content/node_modules ./node_modules
 # Copy compiled shared tools (JS, not TS)
 COPY --from=builder /app/core/shared/dist ./core/shared
-COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/agents/content/dist ./dist
 COPY --from=builder /app/agents/content/package*.json ./
 
 USER appuser
@@ -52,4 +52,4 @@ USER appuser
 EXPOSE 3104
 ENV PORT=3104
 
-CMD ["node", "dist/agents/content/src/index.js"]
+CMD ["node", "dist/src/index.js"]

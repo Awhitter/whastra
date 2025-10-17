@@ -52,4 +52,4 @@ USER appuser
 EXPOSE 3001
 ENV PORT=3001
 
-CMD ["node", "dist/agents/research/src/index.js"]
+CMD ["node", "dist/src/index.js"]

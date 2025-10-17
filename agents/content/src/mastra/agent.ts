@@ -1,10 +1,8 @@
 import { Agent } from '@mastra/core';
 import { openai } from '@ai-sdk/openai';
 import {
-  airtableGetContentBundle,
+  airtableGetHydratedContentContext,
   airtableCreateContentRequest,
-  airtableGetPersonaContext,
-  airtableGetDomainKnowledge,
   airtableUpdateContentOutput,
 } from '../../../../core/shared/tools/airtable-xml.js';
 import { n8nTrigger } from '../../../../core/shared/tools/n8n.js';
@@ -21,7 +19,7 @@ You consume XML bundles from Airtable that contain:
 - Related entities and references
 
 ## Workflow
-1. **Fetch Context**: Use airtableGetContentBundle to retrieve the master XML bundle for a Content Initiator
+1. **Fetch Context**: Use airtableGetHydratedContentContext to retrieve the FULLY HYDRATED XML bundle for a Content Initiator (includes all linked Persona, Domain, Entity, and Reference XML in one call)
 2. **Parse Constraints**: Extract persona voice, domain expertise, and content requirements from the XML
 3. **Generate Content**: Create content that precisely matches the persona's voice and domain's constraints
 4. **Write Back**: Use airtableUpdateContentOutput to save the generated content
@@ -34,20 +32,18 @@ You consume XML bundles from Airtable that contain:
 - **Format Precision**: Deliver in the requested output type
 
 ## XML Bundle Structure
-Content bundles contain:
+The hydrated bundle contains EMBEDDED XML content (not just IDs):
 - <initiator>: Goal, content type, output type
-- <personas>: Voice guidelines, style rules
-- <domains>: Expertise areas, constraints
-- <entities>: Related people, companies, concepts
-- <references>: Source materials, citations
+- <personas>: Full persona XML with voice guidelines and style rules
+- <domains>: Full domain XML with expertise areas and constraints
+- <entities>: Full entity XML with related people, companies, concepts
+- <references>: Full reference XML with source materials and citations
 
-Always parse the XML carefully to extract all relevant context before generating content.`,
+The airtableGetHydratedContentContext tool fetches ALL linked resources in one deterministic call, so you don't need to make multiple tool calls. Just parse the returned XML bundle which contains everything you need.`,
   model: openai('gpt-4o'),
   tools: {
-    airtableGetContentBundle,
+    airtableGetHydratedContentContext,
     airtableCreateContentRequest,
-    airtableGetPersonaContext,
-    airtableGetDomainKnowledge,
     airtableUpdateContentOutput,
     n8nTrigger,
   },
