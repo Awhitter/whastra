@@ -8,7 +8,7 @@ WORKDIR /app
 COPY agents/research/package*.json ./agents/research/
 
 WORKDIR /app/agents/research
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 
 # Builder
 FROM base AS builder
@@ -19,7 +19,7 @@ COPY agents/research/package*.json ./agents/research/
 COPY core/shared ./core/shared/
 
 WORKDIR /app/agents/research
-RUN npm ci
+RUN npm install
 
 # Compile shared tools FIRST (symlink node_modules so tsc can resolve @mastra/zod)
 WORKDIR /app/core/shared
